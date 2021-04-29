@@ -84,7 +84,7 @@ void Master () {
  // Allocated RAM for the output image
  if(!Output.Allocate(Input.Width, Input.Height, Input.Components)) return;
 
- // This is example code of how to copy image files ----------------------------
+ /* //This is example code of how to copy image files ----------------------------
  printf("Start of example code...\n");
  for(j = 0; j < 10; j++){
   tic();
@@ -97,7 +97,50 @@ void Master () {
   printf("Time = %lg ms\n", (double)toc()/1e-3);
  }
  printf("End of example code...\n\n");
- // End of example -------------------------------------------------------------
+ // End of example -------------------------------------------------------------*/
+
+ // Median filter algorithm implementation over whole image------------------------
+ printf("Applying median filter...\n");
+ int x,y,c;
+ // Boundaries not processed
+ for(y = 1; y < Input.Height-1; y++){
+  for(x = 1; x < (Input.Width-1)*Input.Components; x++){
+   for(c = 0; c < Input.Components; c++){
+
+    //Store channel colour value of all neighbours
+    int colours[9] = {
+     Input.Rows[y+1][x+1],
+     Input.Rows[y+1][x],
+     Input.Rows[y+1][x-1],
+     Input.Rows[y][x+1],
+     Input.Rows[y][x],
+     Input.Rows[y][x-1],
+     Input.Rows[y-1][x+1],
+     Input.Rows[y-1][x],
+     Input.Rows[y-1][x-1]
+    };
+
+    // Sort array - insertion sort is fine, this is a small array - basic insertion sort algorithm
+    int k;
+    for(k=1; k < 9; k++){
+     int val = colours[k];
+     int pos = k;
+
+     while(pos > 0 && colours[pos-1] > val){
+      colours[pos] = colours[pos-1];
+      pos = pos-1;
+     }
+
+     colours[pos] = val;
+    }
+    // End of sort
+
+    // Median will be colours[4]
+    Output.Rows[y][x] = colours[4];
+   }
+  }
+ }
+ // End of median filter algorithm---------------------------------------------
 
  // Write the output image
  if(!Output.Write("Data/Output.jpg")){

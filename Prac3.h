@@ -37,6 +37,7 @@
 
 #define BUFSIZE 128
 #define TAG       0
+#define ACK       1	// Tag used when transferring header info
 //------------------------------------------------------------------------------
 
 // MPI House-keeping
