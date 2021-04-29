@@ -105,19 +105,18 @@ void Master () {
  // Boundaries not processed
  for(y = 1; y < Input.Height-1; y++){
   for(x = 1; x < (Input.Width-1)*Input.Components; x++){
-   for(c = 0; c < Input.Components; c++){
 
     //Store channel colour value of all neighbours
     int colours[9] = {
-     Input.Rows[y+1][x+1],
+     Input.Rows[y+1][x+3],
      Input.Rows[y+1][x],
-     Input.Rows[y+1][x-1],
-     Input.Rows[y][x+1],
+     Input.Rows[y+1][x-3],
+     Input.Rows[y][x+3],
      Input.Rows[y][x],
-     Input.Rows[y][x-1],
-     Input.Rows[y-1][x+1],
+     Input.Rows[y][x-3],
+     Input.Rows[y-1][x+3],
      Input.Rows[y-1][x],
-     Input.Rows[y-1][x-1]
+     Input.Rows[y-1][x-3]
     };
 
     // Sort array - insertion sort is fine, this is a small array - basic insertion sort algorithm
@@ -137,7 +136,6 @@ void Master () {
 
     // Median will be colours[4]
     Output.Rows[y][x] = colours[4];
-   }
   }
  }
  // End of median filter algorithm---------------------------------------------
