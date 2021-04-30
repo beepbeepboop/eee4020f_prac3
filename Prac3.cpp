@@ -76,7 +76,7 @@ void Master () {
  // End of "Hello World" example................................................
 
  // Read the input image
- if(!Input.Read("Data/greatwall.jpg")){
+ if(!Input.Read("Data/fly.jpg")){
   printf("Cannot read image\n");
   return;
  }
@@ -99,7 +99,50 @@ void Master () {
  printf("End of example code...\n\n");
  // End of example -------------------------------------------------------------*/
 
- // Median filter algorithm implementation over whole image------------------------
+ JSAMPLE*** Partition; 
+ JSAMPLE*** OutPartition; // Will use this for transfering partitions of our rows
+
+ // Send Workers information they need-------------------------------------------
+ int info[4]; // Row Offset, Number of rows (height), Row width, Image components
+ int split = Input.Height / (numprocs-1);	//How many rows each worker should get
+ for(j = 1; j < numprocs; j++){
+
+  // Allocate image data to each worker
+  info[0] = split*(j-1);	// Row offset
+  info[1] = info[0]+split; // Number of rows
+  if(j == numprocs-1){
+   info[1] += Input.Height % (info[1]); // Last worker also processes the remainder
+  }
+  info[2] = Input.Width; // Row width
+  info[3] = Input.Components; // Image components
+
+  // Send info to worker
+  MPI_Send(info, BUFSIZE, MPI_BYTE, j, ACK, MPI_COMM_WORLD);
+
+ 
+
+  Partition = new JSAMPLE**[info[1]];	//New pointer array to process rows
+  OutPartition = new JSAMPLE**[info[1]];
+
+  for(int i = 0; i < info[1]; i++){
+   Partition[i] = &Input.Rows[info[0]+i];	// Partition points to an array of rows
+   OutPartition[i] = &Output.Rows[info[0]+i];
+  }
+
+  // Send work to worker, the partition he's responsible for in both input and output forms
+  MPI_Send(Partition, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD);
+  MPI_Send(OutPartition, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD);
+ }
+
+ // Wait for workers to finish their tasks
+ printf("0: Waiting for workers...");
+ for(j = 1; j < numprocs; j++){
+  MPI_Recv(OutPartition, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD, &stat);
+ }
+ printf("All workers done!");
+ 
+
+ /*// Median filter algorithm implementation over whole image------------------------
  printf("Applying median filter...\n");
  int x,y,c;
  // Boundaries not processed
@@ -138,7 +181,7 @@ void Master () {
     Output.Rows[y][x] = colours[4];
   }
  }
- // End of median filter algorithm---------------------------------------------
+ // End of median filter algorithm---------------------------------------------*/
 
  // Write the output image
  if(!Output.Write("Data/Output.jpg")){
@@ -147,6 +190,9 @@ void Master () {
  }
  //! <h3>Output</h3> The file Output.jpg will be created on success to save
  //! the processed output.
+
+ delete[] Partition;
+ delete[] OutPartition;
 }
 //------------------------------------------------------------------------------
 
@@ -168,6 +214,74 @@ void Slave(int ID){
  // send to rank 0 (master):
  MPI_Send(buff, BUFSIZE, MPI_CHAR, 0, TAG, MPI_COMM_WORLD);
  // End of "Hello World" example................................................
+
+
+ // Receive image info from master
+ int info[4];
+ MPI_Recv(info, BUFSIZE, MPI_BYTE, 0, ACK, MPI_COMM_WORLD, &stat);
+ printf("Worker %d here! I'll do rows %d to %d!\n", ID, info[0], info[1]);
+ // End of receiving info block ------------------------------------------------
+
+ int start = info[0];
+ int step = info[1];
+ int end = start+step;
+ int width = info[2];
+ int components = info[3];
+
+ // Input and output partitions
+ JSAMPLE*** Partition; 
+ JSAMPLE*** OutPartition;
+
+ // Receive data from master----------------------------------------------------
+ MPI_Recv(Partition, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD, &stat);
+ MPI_Recv(OutPartition, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD, &stat);
+ printf("Worker %d received data\n", ID);
+ // Data Received--------------------------------------------------------------
+
+ // Begin processing image using the median filter algorithm---------------------------------------
+ int x,y,c;
+ // Boundaries not processed
+ for(y = 1; y < step-1; y++){
+  for(x = 1; x < (width-1)*components; x++){
+    
+    //Store channel colour value of all neighbours
+    int colours[9] = {
+     Partition[y+1][x+3],
+     Partition[y+1][x],
+     Partition[y+1][x-3],
+     Partition[y][x+3],
+     Partition[y][x],
+     Partition[y][x-3],
+     Partition[y-1][x+3],
+     Partition[y-1][x],
+     Partition[y-1][x-3]
+    };
+
+
+    // Sort array - insertion sort is fine, this is a small array - basic insertion sort algorithm
+    int k;
+    for(k=1; k < 9; k++){
+     int val = colours[k];
+     int pos = k;
+
+     while(pos > 0 && colours[pos-1] > val){
+      colours[pos] = colours[pos-1];
+      pos = pos-1;
+     }
+
+     colours[pos] = val;
+    }
+    // End of sort
+
+    // Median will be colours[4]
+    OutPartition[y][x] = colours[4];
+  }
+ }
+ // End of median filter -----------------------------------------------------------------------------
+
+ // Send Processed partition back to master
+ MPI_Send(OutPartition, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD);
+ printf("Worker %d done!\n", ID);
 }
 //------------------------------------------------------------------------------
 
