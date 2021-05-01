@@ -109,8 +109,8 @@ void Master () {
   info[1] = info[0]+split; // Height (end)
   if(j == numprocs-1){
    info[1] += Input.Height % (info[1]); // Last worker also processes the remainder
-  }
   int step = info[1]-info[0]; //number of rows
+  }
   info[2] = Input.Width; // Row width
   info[3] = Input.Components; // Image components
 
