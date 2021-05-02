@@ -100,27 +100,33 @@ void Master () {
  // End of example -------------------------------------------------------------*/
 
  // Send Workers information they need-------------------------------------------
- int info[4]; // Row Offset, Number of rows (height), Row width, Image components
+ 
  int split = Input.Height / (numprocs-1);	//How many rows each worker should get
  for(j = 1; j < numprocs; j++){
+  int info[4]; // Row Offset, Number of rows (height), Row width, Image components
 
   // Allocate image data to each worker
   info[0] = split*(j-1);	// Row offset
   info[1] = info[0]+split; // Height (end)
   if(j == numprocs-1){
-   info[1] += Input.Height % (info[1]); // Last worker also processes the remainder
-  int step = info[1]-info[0]; //number of rows
+   info[1] = Input.Height; // Last worker processes the remainder
   }
+  int step = info[1]-info[0]; //number of rows
   info[2] = Input.Width; // Row width
   info[3] = Input.Components; // Image components
 
   // Send info to worker
-  MPI_Send(info, BUFSIZE, MPI_BYTE, j, ACK, MPI_COMM_WORLD);
-  
+  MPI_Send(&info, 4, MPI_INT, j, ACK, MPI_COMM_WORLD);
+  // -------------------------------------------------------
+
+  // Split data and send to workers-------------------------------
   // Buffers to send partitioned image data
-  int inBuffer[step*info[2]*info[3]]; // Rows*Width*Components
-  int outBuffer[step*info[2]*info[3]]; 
+  int buffSize = step*info[2]*info[3];
+  int inBuffer[buffSize]; // Rows*Width*Components
+  int outBuffer[buffSize]; 
+
   // Fill input buffer
+
   int i = 0;
   for(int y = info[0]; y < info[1]; y++){ // Start at offset until end
    for(int x = 0; x < (Input.Width)*Input.Components; x++){ 
@@ -130,17 +136,23 @@ void Master () {
    i++; // Track the start of our new buffer partitions, irrespective of offset
   }
 
+  printf("%d:%d,%d,%d\n", j, inBuffer[50],inBuffer[51],inBuffer[52]);
+  printf("%d:%d,%d,%d\n", j, outBuffer[50],outBuffer[51],outBuffer[52]);
+
   // Send work to worker, the partition he's responsible for in both input and output forms
-  MPI_Send(inBuffer, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD);
-  MPI_Send(outBuffer, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD);
+  MPI_Send(&inBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD);
+  MPI_Send(&outBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD);
  }
 
  // Wait for workers to finish their tasks
- printf("0: Waiting for workers...");
+ printf("0: Waiting for workers...\n");
+ // Data sent to workers-------------------------------------------
+
+ // Receive data from workers--------------------------------------
  for(j = 1; j < numprocs; j++){
   // Receive info from worker to start filling Output image data
   int info[4]; // Offset, Height (end), width, components
-  MPI_Recv(info, BUFSIZE, MPI_BYTE, j, ACK, MPI_COMM_WORLD, &stat);
+  MPI_Recv(&info, 4, MPI_INT, j, ACK, MPI_COMM_WORLD, &stat);
   
   int offset = info[0];
   int end = info[1];
@@ -148,10 +160,12 @@ void Master () {
   int width = info[2];
   int components = info[3];
 
-  int outBuffer[step*width*components];
+  int buffSize = step*width*components;
+  int outBuffer[buffSize];
   // Fill outBuffer with image data
-  MPI_Recv(outBuffer, BUFSIZE, MPI_BYTE, j, TAG, MPI_COMM_WORLD, &stat);
-  
+  MPI_Recv(&outBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD, &stat);
+
+  // Compile data  
   int i = 0;
   for(int y = offset; y < end; y++){ // Start at offset, end at offset+split
    for(int x = 0; x < width*components; x++){ 
@@ -159,10 +173,12 @@ void Master () {
    }
    i++;
   }
+  printf("%d:%d,%d,%d\n", j, outBuffer[50],outBuffer[51],outBuffer[52]);
  }
  printf("All workers done!\n");
- 
+ // Data received and compiled-------------------------------------
 
+ 
  /*// Median filter algorithm implementation over whole image------------------------
  printf("Applying median filter...\n");
  int x,y,c;
@@ -236,7 +252,7 @@ void Slave(int ID){
 
  // Receive image info from master
  int info[4];
- MPI_Recv(info, BUFSIZE, MPI_BYTE, 0, ACK, MPI_COMM_WORLD, &stat);
+ MPI_Recv(&info, 4, MPI_INT, 0, ACK, MPI_COMM_WORLD, &stat);
  printf("Worker %d here! I'll do rows %d to %d!\n", ID, info[0], info[1]);
  // End of receiving info block ------------------------------------------------
  int start = info[0];
@@ -246,12 +262,13 @@ void Slave(int ID){
  int components = info[3];
 
  // Input and output buffers
- int inBuffer[step*width*components]; // Rows*Width*Components
- int outBuffer[step*width*components];
+ int buffSize = step*width*components;
+ int inBuffer[buffSize]; // Rows*Width*Components
+ int outBuffer[buffSize];
 
  // Receive data from master----------------------------------------------------
- MPI_Recv(inBuffer, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD, &stat);
- MPI_Recv(outBuffer, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD, &stat);
+ MPI_Recv(&inBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD, &stat);
+ MPI_Recv(&outBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD, &stat);
  printf("Worker %d received data\n", ID);
  // Data Received--------------------------------------------------------------
 
@@ -296,9 +313,9 @@ void Slave(int ID){
  // End of median filter -----------------------------------------------------------------------------
 
  // Send master info before sending processed image block
- MPI_Send(info, BUFSIZE, MPI_BYTE, 0, ACK, MPI_COMM_WORLD);
+ MPI_Send(&info, 4, MPI_INT, 0, ACK, MPI_COMM_WORLD);
  // Send Processed partition back to master
- MPI_Send(outBuffer, BUFSIZE, MPI_BYTE, 0, TAG, MPI_COMM_WORLD);
+ MPI_Send(&outBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD);
  printf("Worker %d done!\n", ID);
 }
 //------------------------------------------------------------------------------
