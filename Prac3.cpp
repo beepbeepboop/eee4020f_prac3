@@ -49,10 +49,14 @@
 
 // Includes needed for the program
 #include "Prac3.h"
+#include <time.h>
+
+void CSV_add(int,double);
+FILE *fpt;
 
 /** This is the master node function, describing the operations
     that the master will be doing */
-void Master () {
+void Master (int counter) {
  //! <h3>Local vars</h3>
  // The above outputs a heading to doxygen function entry
  int  j;             //! j: Loop counter
@@ -141,6 +145,9 @@ void Master () {
   MPI_Send(&outBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD);
  }
 
+ //start timer
+ struct timespec begin, end;
+ clock_gettime(CLOCK_REALTIME, &begin);
  // Wait for workers to finish their tasks
  printf("0: Waiting for workers...\n");
  // Data sent to workers-------------------------------------------
@@ -173,7 +180,15 @@ void Master () {
  }
  printf("All workers done!\n");
  // Data received and compiled-------------------------------------
-
+ 
+ //end timer
+ clock_gettime(CLOCK_REALTIME, &end);
+ long seconds = end.tv_sec - begin.tv_sec;
+ long nanoseconds = end.tv_nsec - begin.tv_nsec;
+ double elapsed = seconds + nanoseconds*1e-9;
+ printf("Time measured: %.3f seconds.\n", elapsed);
+ counter = counter+0; //debug code to delete
+ CSV_add(counter,elapsed); //add the time to the csv file
  
  /*// Median filter algorithm implementation over whole image------------------------
  printf("Applying median filter...\n");
@@ -316,27 +331,46 @@ void Slave(int ID){
 }
 //------------------------------------------------------------------------------
 
+void CSV_init(){
+	fpt = fopen("MyFile.csv", "w+");
+	fprintf(fpt,"ID, Time\n"); //header rows for csv
+}
+
+void CSV_add(int counter,double toAppend){
+	fprintf(fpt,"%d, %lf\n", counter,toAppend); //adds time elapsed data to csv
+	
+	
+}
+
+//------------------------------------------------------------------------------
+
 /** This is the entry point to the program. */
 int main(int argc, char** argv){
- int myid;
+	 int myid;
 
- // MPI programs start with MPI_Init
- MPI_Init(&argc, &argv);
+	 // MPI programs start with MPI_Init
+	 MPI_Init(&argc, &argv);
 
- // find out how big the world is
- MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+	 // find out how big the world is
+	 MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 
- // and this processes' rank is
- MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+	 // and this processes' rank is
+	 MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
- // At this point, all programs are running equivalently, the rank
- // distinguishes the roles of the programs, with
- // rank 0 often used as the "master".
- if(myid == 0) Master();
- else          Slave (myid);
-
- // MPI programs end with MPI_Finalize
- MPI_Finalize();
+	 // At this point, all programs are running equivalently, the rank
+	 // distinguishes the roles of the programs, with
+	 // rank 0 often used as the "master".
+	 
+	 //for testing purposes to make the graph the entire program is in a for loop and output to a CSV file
+	 CSV_init();
+   for(int counter = 0; counter<100;counter++){
+		 if(myid == 0) Master(counter);
+		 else          Slave (myid);
+	 }
+	 // MPI programs end with MPI_Finalize
+	 MPI_Finalize();
+	 fclose(fpt);
+ 
  return 0;
 }
 //------------------------------------------------------------------------------
