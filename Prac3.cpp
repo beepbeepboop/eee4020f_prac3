@@ -51,7 +51,7 @@
 #include "Prac3.h"
 #include <time.h>
 
-void CSV_add(int,double);
+void CSV_add(int,double,double,double,double);
 FILE *fpt;
 
 /** This is the master node function, describing the operations
@@ -64,9 +64,9 @@ void Master (int counter) {
  MPI_Status stat;    //! stat: Status of the MPI application
 
  // Start of "Hello World" example..............................................
- printf("0: We have %d processors\n", numprocs);
+ //printf("0: We have %d processors\n", numprocs);
  for(j = 1; j < numprocs; j++) {
-  sprintf(buff, "Hello %d! ", j);
+  //sprintf(buff, "Hello %d! ", j);
   MPI_Send(buff, BUFSIZE, MPI_CHAR, j, TAG, MPI_COMM_WORLD);
  }
  for(j = 1; j < numprocs; j++) {
@@ -75,13 +75,13 @@ void Master (int counter) {
   // with MPI_Recv.  This would let the master receive messages from any
   // slave, instead of a specific one only.
   MPI_Recv(buff, BUFSIZE, MPI_CHAR, j, TAG, MPI_COMM_WORLD, &stat);
-  printf("0: %s\n", buff);
+  //printf("0: %s\n", buff);
  }
  // End of "Hello World" example................................................
 
  // Read the input image
  if(!Input.Read("Data/fly.jpg")){
-  printf("Cannot read image\n");
+  //printf("Cannot read image\n");
   return;
  }
 
@@ -104,7 +104,10 @@ void Master (int counter) {
  // End of example -------------------------------------------------------------*/
 
  // Send Workers information they need-------------------------------------------
- 
+ //start timer
+ struct timespec begin, middle1, middle2, middle3, end;
+ clock_gettime(CLOCK_REALTIME, &begin);
+  
  int split = Input.Height / (numprocs-1);	//How many rows each worker should get
  for(j = 1; j < numprocs; j++){
   int info[4]; // Row Offset, Number of rows (height), Row width, Image components
@@ -132,6 +135,10 @@ void Master (int counter) {
   // Fill input buffer
 
   int i = 0;
+  
+  //middle timer tells how long organising workers took
+  clock_gettime(CLOCK_REALTIME, &middle1);
+
   for(int y = info[0]; y < info[1]; y++){ // Start at offset until end
    for(int x = 0; x < (Input.Width)*Input.Components; x++){ 
     inBuffer[i*Input.Width*Input.Components + x] = Input.Rows[y][x];
@@ -144,12 +151,12 @@ void Master (int counter) {
   MPI_Send(&inBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD);
   MPI_Send(&outBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD);
  }
-
- //start timer
- struct timespec begin, end;
- clock_gettime(CLOCK_REALTIME, &begin);
+ 
+ //middle2 timer tells how long sending to workers took
+ clock_gettime(CLOCK_REALTIME, &middle2);
+ 
  // Wait for workers to finish their tasks
- printf("0: Waiting for workers...\n");
+ //printf("0: Waiting for workers...\n");
  // Data sent to workers-------------------------------------------
 
  // Receive data from workers--------------------------------------
@@ -168,7 +175,10 @@ void Master (int counter) {
   int outBuffer[buffSize];
   // Fill outBuffer with image data
   MPI_Recv(&outBuffer, buffSize, MPI_INT, j, TAG, MPI_COMM_WORLD, &stat);
-
+ 
+  //middle3 timer tells how long workers took to do work
+  clock_gettime(CLOCK_REALTIME, &middle3);
+  
   // Compile data  
   int i = 0;
   for(int y = offset; y < end; y++){ // Start at offset, end at offset+split
@@ -178,17 +188,34 @@ void Master (int counter) {
    i++;
   }
  }
- printf("All workers done!\n");
+ //printf("All workers done!\n");
  // Data received and compiled-------------------------------------
  
- //end timer
+ //end timer also includes compiling data time
  clock_gettime(CLOCK_REALTIME, &end);
+ 
+ //calc total time which includes compile
  long seconds = end.tv_sec - begin.tv_sec;
  long nanoseconds = end.tv_nsec - begin.tv_nsec;
  double elapsed = seconds + nanoseconds*1e-9;
- printf("Time measured: %.3f seconds.\n", elapsed);
- counter = counter+0; //debug code to delete
- CSV_add(counter,elapsed); //add the time to the csv file
+ //printf("Total time measured: %.3f seconds.\n", elapsed);
+ //calc organisation time
+ seconds = middle1.tv_sec - begin.tv_sec;
+ nanoseconds = middle1.tv_nsec - begin.tv_nsec;
+ double organisationtime = seconds + nanoseconds*1e-9;
+ //printf("Organisation time measured: %.3f seconds.\n", organisationtime);
+ //calc sending to workers time
+ seconds = middle2.tv_sec - middle1.tv_sec;
+ nanoseconds = middle2.tv_nsec - middle1.tv_nsec;
+ double sendingtime = seconds + nanoseconds*1e-9;
+ //printf("Worker Sending time measured: %.3f seconds.\n", sendingtime);
+ //calc workers doing job time
+ seconds = middle3.tv_sec - middle2.tv_sec;
+ nanoseconds = middle3.tv_nsec - middle2.tv_nsec;
+ double jobtime = seconds + nanoseconds*1e-9;
+ //printf("Workers working time measured: %.3f seconds.\n", jobtime);
+ 
+ CSV_add(counter,organisationtime, sendingtime, jobtime, elapsed); //add the times to the csv file
  
  /*// Median filter algorithm implementation over whole image------------------------
  printf("Applying median filter...\n");
@@ -252,9 +279,9 @@ void Slave(int ID){
  // receive from rank 0 (master):
  // This is a blocking receive, which is typical for slaves.
  MPI_Recv(buff, BUFSIZE, MPI_CHAR, 0, TAG, MPI_COMM_WORLD, &stat);
- sprintf(idstr, "Processor %d ", ID);
- strncat(buff, idstr, BUFSIZE-1);
- strncat(buff, "reporting for duty", BUFSIZE-1);
+ //sprintf(idstr, "Processor %d ", ID);
+ //strncat(buff, idstr, BUFSIZE-1);
+ //strncat(buff, "reporting for duty", BUFSIZE-1);
 
  // send to rank 0 (master):
  MPI_Send(buff, BUFSIZE, MPI_CHAR, 0, TAG, MPI_COMM_WORLD);
@@ -264,7 +291,7 @@ void Slave(int ID){
  // Receive image info from master
  int info[4];
  MPI_Recv(&info, 4, MPI_INT, 0, ACK, MPI_COMM_WORLD, &stat);
- printf("Worker %d here! I'll do rows %d to %d!\n", ID, info[0], info[1]);
+ //printf("Worker %d here! I'll do rows %d to %d!\n", ID, info[0], info[1]);
  // End of receiving info block ------------------------------------------------
  int start = info[0];
  int end = info[1];
@@ -280,7 +307,7 @@ void Slave(int ID){
  // Receive data from master----------------------------------------------------
  MPI_Recv(&inBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD, &stat);
  MPI_Recv(&outBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD, &stat);
- printf("Worker %d received data\n", ID);
+ //printf("Worker %d received data\n", ID);
  // Data Received--------------------------------------------------------------
 
  // Begin processing image using the median filter algorithm---------------------------------------
@@ -327,17 +354,17 @@ void Slave(int ID){
  MPI_Send(&info, 4, MPI_INT, 0, ACK, MPI_COMM_WORLD);
  // Send Processed partition back to master
  MPI_Send(&outBuffer, buffSize, MPI_INT, 0, TAG, MPI_COMM_WORLD);
- printf("Worker %d done!\n", ID);
+ //printf("Worker %d done!\n", ID);
 }
 //------------------------------------------------------------------------------
 
 void CSV_init(){
 	fpt = fopen("MyFile.csv", "w+");
-	fprintf(fpt,"ID, Time\n"); //header rows for csv
+	fprintf(fpt,"ID, OrganisationTime, SendingToWorkersTime, WorkersWorkingTime, TotalTime\n"); //header rows for csv
 }
 
-void CSV_add(int counter,double toAppend){
-	fprintf(fpt,"%d, %lf\n", counter,toAppend); //adds time elapsed data to csv
+void CSV_add(int counter,double organisationtime,double sendingtime,double jobtime,double elapsed){
+	fprintf(fpt,"%d,%lf,%lf,%lf,%lf\n", counter,organisationtime, sendingtime, jobtime, elapsed); //adds all time data to csv
 	
 	
 }
@@ -370,7 +397,7 @@ int main(int argc, char** argv){
 	 // MPI programs end with MPI_Finalize
 	 MPI_Finalize();
 	 fclose(fpt);
- 
+ printf("end of program ");
  return 0;
 }
 //------------------------------------------------------------------------------
