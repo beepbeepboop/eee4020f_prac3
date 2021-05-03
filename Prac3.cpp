@@ -104,8 +104,9 @@ void Master (int counter) {
  // End of example -------------------------------------------------------------*/
 
  // Send Workers information they need-------------------------------------------
- //start timer
+ //initialise timer
  struct timespec begin, middle1, middle2, middle3, end;
+ //start the timer
  clock_gettime(CLOCK_REALTIME, &begin);
   
  int split = Input.Height / (numprocs-1);	//How many rows each worker should get
@@ -197,7 +198,7 @@ void Master (int counter) {
  //calc total time which includes compile
  long seconds = end.tv_sec - begin.tv_sec;
  long nanoseconds = end.tv_nsec - begin.tv_nsec;
- double elapsed = seconds + nanoseconds*1e-9;
+ double elapsed = seconds + nanoseconds*1e-9; //calculated from the difference between the end and begin times
  //printf("Total time measured: %.3f seconds.\n", elapsed);
  //calc organisation time
  seconds = middle1.tv_sec - begin.tv_sec;
@@ -357,16 +358,14 @@ void Slave(int ID){
  //printf("Worker %d done!\n", ID);
 }
 //------------------------------------------------------------------------------
-
+//method to initialise csv
 void CSV_init(){
 	fpt = fopen("MyFile.csv", "w+");
 	fprintf(fpt,"ID, OrganisationTime, SendingToWorkersTime, WorkersWorkingTime, TotalTime\n"); //header rows for csv
 }
-
+//method for adding data to csv
 void CSV_add(int counter,double organisationtime,double sendingtime,double jobtime,double elapsed){
-	fprintf(fpt,"%d,%lf,%lf,%lf,%lf\n", counter,organisationtime, sendingtime, jobtime, elapsed); //adds all time data to csv
-	
-	
+	fprintf(fpt,"%d,%lf,%lf,%lf,%lf\n", counter,organisationtime, sendingtime, jobtime, elapsed); //adds all time data to csv	
 }
 
 //------------------------------------------------------------------------------
